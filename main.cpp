@@ -11,7 +11,7 @@ SDL_Surface* surface = nullptr;
 
 SDL_Texture* playerTexture = nullptr;
 SDL_Rect playerRect = {190, 270, 20, 20};
-int playerSpeed = 1;
+int playerSpeed = 3;
 
 const int windowWidth = 800;
 const int windowHeight = 600;
