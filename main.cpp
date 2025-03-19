@@ -12,6 +12,8 @@ SDL_Surface* surface = nullptr;
 SDL_Texture* playerTexture = nullptr;
 SDL_Rect playerRect = {190, 270, 20, 20};
 int playerSpeed = 3;
+double playerAngle = 0;
+SDL_RendererFlip playerFlip = SDL_FLIP_NONE;
 
 const int windowWidth = 800;
 const int windowHeight = 600;
@@ -72,7 +74,7 @@ void render() {
     int y = (windowHeight - mapHeight) / 2;
     SDL_Rect destRect = {x, y, mapWidth, mapHeight};
     SDL_RenderCopy(renderer, texture, nullptr, &destRect);
-    SDL_RenderCopy(renderer, playerTexture, nullptr, &playerRect);
+    SDL_RenderCopyEx(renderer, playerTexture, nullptr, &playerRect, playerAngle, nullptr, playerFlip);
 
     SDL_RenderPresent(renderer);
 }
@@ -93,16 +95,22 @@ while (running) {
         else if (event.type == SDL_KEYDOWN) {
             switch (event.key.keysym.sym) {
                 case SDLK_UP:
-                    playerRect.y -= playerSpeed; 
+                    playerRect.y -= playerSpeed;
+                    playerAngle = 270; 
                     break;
                 case SDLK_DOWN:
                     playerRect.y += playerSpeed; 
+                    playerAngle = 90;
                     break;
                 case SDLK_LEFT:
-                    playerRect.x -= playerSpeed; 
+                    playerRect.x -= playerSpeed;
+                    playerAngle = 0;
+                    playerFlip = SDL_FLIP_VERTICAL; 
                     break;
                 case SDLK_RIGHT:
                     playerRect.x += playerSpeed; 
+                    playerAngle = 0;
+                    playerFlip = SDL_FLIP_NONE;
                     break;
             }
         }
