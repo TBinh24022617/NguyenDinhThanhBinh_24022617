@@ -12,6 +12,8 @@ public:
     Ghost(int x, int y);  
     virtual void update(SDL_Rect pacman, int pacmanDirection);
     void render(SDL_Renderer* renderer, SDL_Texture* texture);  
+
+    SDL_Rect getRect() const { return rect; }
 };
 
 #endif

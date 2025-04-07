@@ -4,6 +4,8 @@
 #include "Ghost.h"
 #include "Pinky.h"
 #include "Inky.h"
+#include "Clyde.h"
+
 #undef main
 
 SDL_Window* window = nullptr;
@@ -20,10 +22,12 @@ SDL_RendererFlip playerFlip = SDL_FLIP_NONE;
 SDL_Texture* blinkyTexture = nullptr;
 SDL_Texture* pinkyTexture = nullptr;
 SDL_Texture* inkyTexture = nullptr;
+SDL_Texture* clydeTexture = nullptr;
 
 Ghost blinky((800 - 20) / 2, (600 - 20) / 2);
 Pinky pinky((800 - 20) / 2, (600 - 20) / 2);
 Inky inky((800 - 20) / 2, (600 - 20) / 2);
+Clyde clyde((800 - 20) / 2, (600 - 20) / 2);
 
 const int windowWidth = 800;
 const int windowHeight = 600;
@@ -38,7 +42,8 @@ bool init() {
         return false;
     }
 
-    window = SDL_CreateWindow("Game Window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windowWidth, windowHeight, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Đi săn hay bị săn", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                              windowWidth, windowHeight, SDL_WINDOW_SHOWN);
     if (!window) {
         std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
         return false;
@@ -54,7 +59,7 @@ bool init() {
 
     surface = IMG_Load("assets/map.png");
     if (!surface) {
-        std::cerr << "Failed to load image! SDL_image Error: " << IMG_GetError() << std::endl;
+        std::cerr << "Failed to load map! SDL_image Error: " << IMG_GetError() << std::endl;
         return false;
     }
     texture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -62,7 +67,7 @@ bool init() {
 
     surface = IMG_Load("assets/player.png");
     if (!surface) {
-        std::cerr << "Failed to load player image! SDL_image Error: " << IMG_GetError() << std::endl;
+        std::cerr << "Failed to load player! SDL_image Error: " << IMG_GetError() << std::endl;
         return false;
     }
     playerTexture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -70,7 +75,7 @@ bool init() {
 
     surface = IMG_Load("assets/blinky.png");
     if (!surface) {
-        std::cerr << "Failed to load blinky image! SDL_image Error: " << IMG_GetError() << std::endl;
+        std::cerr << "Failed to load blinky! SDL_image Error: " << IMG_GetError() << std::endl;
         return false;
     }
     blinkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -78,7 +83,7 @@ bool init() {
 
     surface = IMG_Load("assets/pinky.png");
     if (!surface) {
-        std::cerr << "Failed to load pinky image! SDL_image Error: " << IMG_GetError() << std::endl;
+        std::cerr << "Failed to load pinky! SDL_image Error: " << IMG_GetError() << std::endl;
         return false;
     }
     pinkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -86,10 +91,18 @@ bool init() {
 
     surface = IMG_Load("assets/inky.png");
     if (!surface) {
-        std::cerr << "Failed to load inky image! SDL_image Error: " << IMG_GetError() << std::endl;
+        std::cerr << "Failed to load inky! SDL_image Error: " << IMG_GetError() << std::endl;
         return false;
     }
     inkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    surface = IMG_Load("assets/clyde.png");
+    if (!surface) {
+        std::cerr << "Failed to load clyde! SDL_image Error: " << IMG_GetError() << std::endl;
+        return false;
+    }
+    clydeTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
     return true;
@@ -101,6 +114,7 @@ void close() {
     SDL_DestroyTexture(blinkyTexture);
     SDL_DestroyTexture(pinkyTexture);
     SDL_DestroyTexture(inkyTexture);
+    SDL_DestroyTexture(clydeTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -116,9 +130,11 @@ void render() {
     SDL_RenderCopy(renderer, texture, nullptr, &destRect);
 
     SDL_RenderCopyEx(renderer, playerTexture, nullptr, &playerRect, playerAngle, nullptr, playerFlip);
+
     blinky.render(renderer, blinkyTexture);
     pinky.render(renderer, pinkyTexture);
     inky.render(renderer, inkyTexture);
+    clyde.render(renderer, clydeTexture);
 
     SDL_RenderPresent(renderer);
 }
@@ -145,12 +161,14 @@ int main(int argc, char* argv[]) {
                         playerRect.y -= playerSpeed;
                         playerAngle = 270;
                         pacmanDirection = 0;
+                        playerFlip = SDL_FLIP_NONE;
                         playerMoved = true;
                         break;
                     case SDLK_DOWN:
                         playerRect.y += playerSpeed;
                         playerAngle = 90;
                         pacmanDirection = 1;
+                        playerFlip = SDL_FLIP_NONE;
                         playerMoved = true;
                         break;
                     case SDLK_LEFT:
@@ -173,16 +191,22 @@ int main(int argc, char* argv[]) {
                     blinky.active = true;
                     pinky.active = true;
                     inky.active = true;
+                    clyde.active = true;
                 }
             }
         }
 
         if (blinky.active)
             blinky.update(playerRect, pacmanDirection);
+
         if (pinky.active)
             pinky.update(playerRect, pacmanDirection);
+
         if (inky.active)
-            inky.update(playerRect, pacmanDirection);
+            inky.update(playerRect, pacmanDirection, blinky.rect);
+
+        if (clyde.active)
+            clyde.update(playerRect, pacmanDirection);
 
         render();
     }
