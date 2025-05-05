@@ -1,4 +1,7 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
 #include "include/SDL.h"
 #include "include/SDL_image.h"
 #include "Ghost.h"
@@ -7,11 +10,10 @@
 #include "Clyde.h"
 
 #undef main
+using namespace std;
 
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
-SDL_Texture* texture = nullptr;
-SDL_Surface* surface = nullptr;
 
 SDL_Texture* playerTexture = nullptr;
 SDL_Rect playerRect = {190, 270, 20, 20};
@@ -23,85 +25,124 @@ SDL_Texture* blinkyTexture = nullptr;
 SDL_Texture* pinkyTexture = nullptr;
 SDL_Texture* inkyTexture = nullptr;
 SDL_Texture* clydeTexture = nullptr;
+SDL_Texture* tilesetTexture = nullptr;
 
 Ghost blinky((800 - 20) / 2, (600 - 20) / 2);
 Pinky pinky((800 - 20) / 2, (600 - 20) / 2);
 Inky inky((800 - 20) / 2, (600 - 20) / 2);
 Clyde clyde((800 - 20) / 2, (600 - 20) / 2);
 
-const int windowWidth = 800;
+const int windowWidth  = 800;
 const int windowHeight = 600;
-const int mapWidth = 420;
-const int mapHeight = 465;
+const int TILE_SIZE    = 16;
+
+vector<vector<int>> mapData;
+int tilesetCols = 0;
 
 bool playerMoved = false;
 
+// Hàm đọc map từ map.txt
+vector<vector<int>> LoadMap(const string& filename) {
+    ifstream file(filename);
+    vector<vector<int>> result;
+    string line;
+    while (getline(file, line)) {
+        istringstream ss(line);
+        vector<int> row;
+        string token;
+        while (ss >> token) {
+            row.push_back(stoi(token));
+        }
+        result.push_back(row);
+    }
+    return result;
+}
+
+// Hàm vẽ map
+void RenderMap(SDL_Renderer* renderer, SDL_Texture* tileset,
+               const vector<vector<int>>& map, int tileSize, int cols)
+{
+    SDL_Rect srcRect, dstRect;
+    srcRect.w = srcRect.h = dstRect.w = dstRect.h = tileSize;
+
+    // Canh giữa map
+    int offsetX = (windowWidth  - map[0].size() * tileSize) / 2;
+    int offsetY = (windowHeight - map.size()   * tileSize) / 2;
+
+    for (int y = 0; y < map.size(); ++y) {
+        for (int x = 0; x < map[y].size(); ++x) {
+            int idx = map[y][x];
+            if (idx < 0) continue;
+            srcRect.x = (idx % cols) * tileSize;
+            srcRect.y = (idx / cols) * tileSize;
+            dstRect.x = offsetX + x * tileSize;
+            dstRect.y = offsetY + y * tileSize;
+            SDL_RenderCopy(renderer, tileset, &srcRect, &dstRect);
+        }
+    }
+}
+
 bool init() {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
+        cerr << "SDL could not initialize! " << SDL_GetError() << endl;
+        return false;
+    }
+    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
+        cerr << "SDL_image could not initialize! " << IMG_GetError() << endl;
         return false;
     }
 
-    window = SDL_CreateWindow("Đi săn hay bị săn", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                              windowWidth, windowHeight, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Đi săn hay bị săn",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        windowWidth, windowHeight, SDL_WINDOW_SHOWN);
     if (!window) {
-        std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
+        cerr << "Window creation failed! " << SDL_GetError() << endl;
         return false;
     }
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!renderer) {
-        std::cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << std::endl;
+        cerr << "Renderer creation failed! " << SDL_GetError() << endl;
         return false;
     }
-
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 
-    surface = IMG_Load("assets/map.png");
+    // ----- Load tileset -----
+    SDL_Surface* surface = IMG_Load("assets/tilesetpacman.png");
     if (!surface) {
-        std::cerr << "Failed to load map! SDL_image Error: " << IMG_GetError() << std::endl;
+        cerr << "Failed to load tileset! " << IMG_GetError() << endl;
         return false;
     }
-    texture = SDL_CreateTextureFromSurface(renderer, surface);
+    tilesetCols    = surface->w / TILE_SIZE;
+    tilesetTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
+    // ----- Load map -----
+    mapData = LoadMap("map.txt");
+
+    // ----- Load player & ghosts textures -----
     surface = IMG_Load("assets/player.png");
-    if (!surface) {
-        std::cerr << "Failed to load player! SDL_image Error: " << IMG_GetError() << std::endl;
-        return false;
-    }
+    if (!surface) { cerr << "player.png load failed! " << IMG_GetError() << endl; return false; }
     playerTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
     surface = IMG_Load("assets/blinky.png");
-    if (!surface) {
-        std::cerr << "Failed to load blinky! SDL_image Error: " << IMG_GetError() << std::endl;
-        return false;
-    }
+    if (!surface) { cerr << "blinky.png load failed! " << IMG_GetError() << endl; return false; }
     blinkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
     surface = IMG_Load("assets/pinky.png");
-    if (!surface) {
-        std::cerr << "Failed to load pinky! SDL_image Error: " << IMG_GetError() << std::endl;
-        return false;
-    }
+    if (!surface) { cerr << "pinky.png load failed! " << IMG_GetError() << endl; return false; }
     pinkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
     surface = IMG_Load("assets/inky.png");
-    if (!surface) {
-        std::cerr << "Failed to load inky! SDL_image Error: " << IMG_GetError() << std::endl;
-        return false;
-    }
+    if (!surface) { cerr << "inky.png load failed! " << IMG_GetError() << endl; return false; }
     inkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
     surface = IMG_Load("assets/clyde.png");
-    if (!surface) {
-        std::cerr << "Failed to load clyde! SDL_image Error: " << IMG_GetError() << std::endl;
-        return false;
-    }
+    if (!surface) { cerr << "clyde.png load failed! " << IMG_GetError() << endl; return false; }
     clydeTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
@@ -109,7 +150,7 @@ bool init() {
 }
 
 void close() {
-    SDL_DestroyTexture(texture);
+    SDL_DestroyTexture(tilesetTexture);
     SDL_DestroyTexture(playerTexture);
     SDL_DestroyTexture(blinkyTexture);
     SDL_DestroyTexture(pinkyTexture);
@@ -117,20 +158,21 @@ void close() {
     SDL_DestroyTexture(clydeTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    IMG_Quit();
     SDL_Quit();
 }
 
 void render() {
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
 
-    int x = (windowWidth - mapWidth) / 2;
-    int y = (windowHeight - mapHeight) / 2;
-    SDL_Rect destRect = {x, y, mapWidth, mapHeight};
-    SDL_RenderCopy(renderer, texture, nullptr, &destRect);
+    // Vẽ map
+    RenderMap(renderer, tilesetTexture, mapData, TILE_SIZE, tilesetCols);
 
-    SDL_RenderCopyEx(renderer, playerTexture, nullptr, &playerRect, playerAngle, nullptr, playerFlip);
+    // Vẽ Pac-Man
+    SDL_RenderCopyEx(renderer, playerTexture, nullptr, &playerRect,
+                     playerAngle, nullptr, playerFlip);
 
+    // Vẽ ghosts
     blinky.render(renderer, blinkyTexture);
     pinky.render(renderer, pinkyTexture);
     inky.render(renderer, inkyTexture);
@@ -141,7 +183,7 @@ void render() {
 
 int main(int argc, char* argv[]) {
     if (!init()) {
-        std::cerr << "Failed to initialize!\n";
+        cerr << "Failed to initialize!\n";
         system("pause");
         return -1;
     }
@@ -159,54 +201,31 @@ int main(int argc, char* argv[]) {
                 switch (event.key.keysym.sym) {
                     case SDLK_UP:
                         playerRect.y -= playerSpeed;
-                        playerAngle = 270;
-                        pacmanDirection = 0;
-                        playerFlip = SDL_FLIP_NONE;
-                        playerMoved = true;
+                        playerAngle = 270; pacmanDirection = 0; playerFlip = SDL_FLIP_NONE; playerMoved = true;
                         break;
                     case SDLK_DOWN:
                         playerRect.y += playerSpeed;
-                        playerAngle = 90;
-                        pacmanDirection = 1;
-                        playerFlip = SDL_FLIP_NONE;
-                        playerMoved = true;
+                        playerAngle = 90;  pacmanDirection = 1; playerFlip = SDL_FLIP_NONE; playerMoved = true;
                         break;
                     case SDLK_LEFT:
                         playerRect.x -= playerSpeed;
-                        playerAngle = 0;
-                        pacmanDirection = 2;
-                        playerFlip = SDL_FLIP_VERTICAL;
-                        playerMoved = true;
+                        playerAngle = 0;   pacmanDirection = 2; playerFlip = SDL_FLIP_VERTICAL; playerMoved = true;
                         break;
                     case SDLK_RIGHT:
                         playerRect.x += playerSpeed;
-                        playerAngle = 0;
-                        pacmanDirection = 3;
-                        playerFlip = SDL_FLIP_NONE;
-                        playerMoved = true;
+                        playerAngle = 0;   pacmanDirection = 3; playerFlip = SDL_FLIP_NONE; playerMoved = true;
                         break;
                 }
-
                 if (playerMoved) {
-                    blinky.active = true;
-                    pinky.active = true;
-                    inky.active = true;
-                    clyde.active = true;
+                    blinky.active = pinky.active = inky.active = clyde.active = true;
                 }
             }
         }
 
-        if (blinky.active)
-            blinky.update(playerRect, pacmanDirection);
-
-        if (pinky.active)
-            pinky.update(playerRect, pacmanDirection);
-
-        if (inky.active)
-            inky.update(playerRect, pacmanDirection, blinky.rect);
-
-        if (clyde.active)
-            clyde.update(playerRect, pacmanDirection);
+        if (blinky.active) blinky.update(playerRect, pacmanDirection);
+        if (pinky.active)  pinky.update(playerRect, pacmanDirection);
+        if (inky.active)   inky.update(playerRect, pacmanDirection, blinky.rect);
+        if (clyde.active)  clyde.update(playerRect, pacmanDirection);
 
         render();
     }

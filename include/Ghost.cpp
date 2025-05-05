@@ -16,6 +16,7 @@ void Ghost::update(SDL_Rect pacman,int pacmanDirection) {
     else if (rect.y > pacman.y) rect.y -= speed;
 }
 
+
 void Ghost::render(SDL_Renderer* renderer, SDL_Texture* texture) {
     SDL_RenderCopy(renderer, texture, NULL, &rect);
 }
