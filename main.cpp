@@ -34,14 +34,13 @@ Clyde clyde((800 - 20) / 2, (600 - 20) / 2);
 
 const int windowWidth  = 800;
 const int windowHeight = 600;
-const int TILE_SIZE    = 16;
+const int TILE_SIZE    = 8;
 
 vector<vector<int>> mapData;
 int tilesetCols = 0;
 
 bool playerMoved = false;
 
-// Hàm đọc map từ map.txt
 vector<vector<int>> LoadMap(const string& filename) {
     ifstream file(filename);
     vector<vector<int>> result;
@@ -51,21 +50,18 @@ vector<vector<int>> LoadMap(const string& filename) {
         vector<int> row;
         string token;
         while (ss >> token) {
-            row.push_back(stoi(token));
+            row.push_back(stoi(token, nullptr, 16));
         }
         result.push_back(row);
     }
     return result;
 }
 
-// Hàm vẽ map
 void RenderMap(SDL_Renderer* renderer, SDL_Texture* tileset,
-               const vector<vector<int>>& map, int tileSize, int cols)
-{
+               const vector<vector<int>>& map, int tileSize, int cols) {
     SDL_Rect srcRect, dstRect;
     srcRect.w = srcRect.h = dstRect.w = dstRect.h = tileSize;
 
-    // Canh giữa map
     int offsetX = (windowWidth  - map[0].size() * tileSize) / 2;
     int offsetY = (windowHeight - map.size()   * tileSize) / 2;
 
@@ -92,7 +88,7 @@ bool init() {
         return false;
     }
 
-    window = SDL_CreateWindow("Đi săn hay bị săn",
+    window = SDL_CreateWindow("\u0110i s\u0103n hay b\u1ecb s\u0103n",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         windowWidth, windowHeight, SDL_WINDOW_SHOWN);
     if (!window) {
@@ -107,8 +103,7 @@ bool init() {
     }
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 
-    // ----- Load tileset -----
-    SDL_Surface* surface = IMG_Load("assets/tilesetpacman.png");
+    SDL_Surface* surface = IMG_Load("assets/tilesetpacman2.png");
     if (!surface) {
         cerr << "Failed to load tileset! " << IMG_GetError() << endl;
         return false;
@@ -117,10 +112,8 @@ bool init() {
     tilesetTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    // ----- Load map -----
     mapData = LoadMap("map.txt");
 
-    // ----- Load player & ghosts textures -----
     surface = IMG_Load("assets/player.png");
     if (!surface) { cerr << "player.png load failed! " << IMG_GetError() << endl; return false; }
     playerTexture = SDL_CreateTextureFromSurface(renderer, surface);
@@ -165,14 +158,11 @@ void close() {
 void render() {
     SDL_RenderClear(renderer);
 
-    // Vẽ map
     RenderMap(renderer, tilesetTexture, mapData, TILE_SIZE, tilesetCols);
 
-    // Vẽ Pac-Man
     SDL_RenderCopyEx(renderer, playerTexture, nullptr, &playerRect,
                      playerAngle, nullptr, playerFlip);
 
-    // Vẽ ghosts
     blinky.render(renderer, blinkyTexture);
     pinky.render(renderer, pinkyTexture);
     inky.render(renderer, inkyTexture);
