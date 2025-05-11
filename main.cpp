@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <algorithm> 
 #include "include/SDL.h"
 #include "include/SDL_image.h"
 #include "Ghost.h"
@@ -34,7 +35,7 @@ Clyde clyde((800 - 20) / 2, (600 - 20) / 2);
 
 const int windowWidth  = 800;
 const int windowHeight = 600;
-const int TILE_SIZE    = 8;
+const int TILE_SIZE    = 16;
 
 vector<vector<int>> mapData;
 int tilesetCols = 0;
@@ -49,10 +50,14 @@ vector<vector<int>> LoadMap(const string& filename) {
         istringstream ss(line);
         vector<int> row;
         string token;
-        while (ss >> token) {
-            row.push_back(stoi(token, nullptr, 16));
+        while (getline(ss, token, ',')) {
+            token.erase(remove_if(token.begin(), token.end(), ::isspace), token.end());
+            if (!token.empty()) {
+                row.push_back(stoi(token));
+            }
         }
-        result.push_back(row);
+        if (!row.empty())
+            result.push_back(row);
     }
     return result;
 }
@@ -88,7 +93,7 @@ bool init() {
         return false;
     }
 
-    window = SDL_CreateWindow("\u0110i s\u0103n hay b\u1ecb s\u0103n",
+    window = SDL_CreateWindow("Đi săn hay bị săn",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         windowWidth, windowHeight, SDL_WINDOW_SHOWN);
     if (!window) {
@@ -103,7 +108,8 @@ bool init() {
     }
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 
-    SDL_Surface* surface = IMG_Load("assets/tilesetpacman2.png");
+    // Load tileset mới
+    SDL_Surface* surface = IMG_Load("assets/tilesetedit.png");
     if (!surface) {
         cerr << "Failed to load tileset! " << IMG_GetError() << endl;
         return false;
@@ -112,8 +118,10 @@ bool init() {
     tilesetTexture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_FreeSurface(surface);
 
-    mapData = LoadMap("map.txt");
+    // Load map CSV mới
+    mapData = LoadMap("mappacman.csv");
 
+    // Load texture nhân vật và ma
     surface = IMG_Load("assets/player.png");
     if (!surface) { cerr << "player.png load failed! " << IMG_GetError() << endl; return false; }
     playerTexture = SDL_CreateTextureFromSurface(renderer, surface);
