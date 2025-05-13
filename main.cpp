@@ -27,6 +27,7 @@ SDL_Renderer* renderer = nullptr;
 SDL_Texture* playerTexture = nullptr;
 SDL_Texture* screenTexture = nullptr;
 SDL_Texture* gameOverTexture = nullptr;  // Texture cho màn hình game over
+SDL_Texture* winTexture = nullptr;      // Texture cho màn hình chiến thắng
 SDL_Texture* blinkyTexture = nullptr;
 SDL_Texture* pinkyTexture = nullptr;
 SDL_Texture* inkyTexture = nullptr;
@@ -49,6 +50,8 @@ vector<vector<int>> mapData;
 int tilesetCols = 0;
 bool playerMoved = false;
 bool isGameOver = false;  // Biến để kiểm tra trạng thái game over
+bool isWin = false;      // Biến để kiểm tra trạng thái chiến thắng
+int remainingDots = 0;   // Biến đếm số điểm còn lại
 
 SDL_Point FindSpawnPosition() {
     int offsetX = (windowWidth - mapData[0].size() * TILE_SIZE) / 2;
@@ -157,6 +160,15 @@ bool CheckCollisionWithGhosts(SDL_Rect player, SDL_Rect ghost) {
     return true;
 }
 
+bool CheckRemainingDots() {
+    for (const auto& row : mapData) {
+        for (int tile : row) {
+            if (tile == 176) return false; // Còn điểm
+        }
+    }
+    return true; // Hết điểm
+}
+
 void ShowGameOverScreen() {
     // Dừng nhạc hiện tại
     SoundManager::Stop();
@@ -181,6 +193,30 @@ void ShowGameOverScreen() {
     }
 }
 
+void ShowWinScreen() {
+    // Dừng nhạc hiện tại
+    SoundManager::Stop();
+    // Phát âm thanh chiến thắng
+    SoundManager::Play("music/pacmanwin.mp3", false);
+
+    bool waiting = true;
+    SDL_Event event;
+
+    while (waiting) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT || 
+               (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_RETURN)) {
+                waiting = false;
+            }
+        }
+
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, winTexture, nullptr, nullptr);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
+    }
+}
+
 bool init() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) return false;
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) return false;
@@ -195,15 +231,19 @@ bool init() {
     if (!renderer) return false;    SDL_Surface* screenSurface = IMG_Load("assets/Pacmanscreen.png");
     if (!screenSurface) return false;
     screenTexture = SDL_CreateTextureFromSurface(renderer, screenSurface);
-    SDL_FreeSurface(screenSurface);
-
-    // Load game over texture
+    SDL_FreeSurface(screenSurface);    // Load game over texture
     SDL_Surface* gameOverSurface = IMG_Load("assets/gameover.png");
     if (!gameOverSurface) return false;
     gameOverTexture = SDL_CreateTextureFromSurface(renderer, gameOverSurface);
     SDL_FreeSurface(gameOverSurface);
 
-    return screenTexture != nullptr && gameOverTexture != nullptr;
+    // Load win texture
+    SDL_Surface* winSurface = IMG_Load("assets/pacmanwin.png");
+    if (!winSurface) return false;
+    winTexture = SDL_CreateTextureFromSurface(renderer, winSurface);
+    SDL_FreeSurface(winSurface);
+
+    return screenTexture != nullptr && gameOverTexture != nullptr && winTexture != nullptr;
 }
 
 void close() {
@@ -381,13 +421,17 @@ int main(int argc, char* argv[]) {
         SDL_RenderCopy(renderer, blinkyTexture, nullptr, &blinky.rect);
         SDL_RenderCopy(renderer, pinkyTexture, nullptr, &pinky.rect);
         SDL_RenderCopy(renderer, inkyTexture, nullptr, &inky.rect);
-        SDL_RenderCopy(renderer, clydeTexture, nullptr, &clyde.rect);
-
-        SDL_RenderPresent(renderer);
+        SDL_RenderCopy(renderer, clydeTexture, nullptr, &clyde.rect);        SDL_RenderPresent(renderer);
         SDL_Delay(16);
 
         if (isGameOver) {
             ShowGameOverScreen();
+            quit = true;
+        }
+
+        // Kiểm tra chiến thắng
+        if (CheckRemainingDots()) {
+            ShowWinScreen();
             quit = true;
         }
     }

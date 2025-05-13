@@ -5,7 +5,7 @@
 
 Ghost::Ghost(int x, int y, int w, int h) {
     rect = {x, y, w, h};
-    speed = 2;
+    speed = 1;
     active = false;
     currentDirection = 3;
     currentState = SCATTER;
