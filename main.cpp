@@ -2,45 +2,75 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
-#include <algorithm> 
+#include <algorithm>
 #include "include/SDL.h"
 #include "include/SDL_image.h"
+#include "include/SDL_mixer.h"
 #include "Ghost.h"
 #include "Pinky.h"
 #include "Inky.h"
 #include "Clyde.h"
-
+#include "MapUtils.h"
+#include "SoundManager.h"
 #undef main
+
 using namespace std;
 
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
 
 SDL_Texture* playerTexture = nullptr;
-SDL_Rect playerRect = {190, 270, 20, 20};
-int playerSpeed = 3;
-double playerAngle = 0;
-SDL_RendererFlip playerFlip = SDL_FLIP_NONE;
-
+SDL_Texture* screenTexture = nullptr;
 SDL_Texture* blinkyTexture = nullptr;
 SDL_Texture* pinkyTexture = nullptr;
 SDL_Texture* inkyTexture = nullptr;
 SDL_Texture* clydeTexture = nullptr;
 SDL_Texture* tilesetTexture = nullptr;
 
-Ghost blinky((800 - 20) / 2, (600 - 20) / 2);
-Pinky pinky((800 - 20) / 2, (600 - 20) / 2);
-Inky inky((800 - 20) / 2, (600 - 20) / 2);
-Clyde clyde((800 - 20) / 2, (600 - 20) / 2);
-
-const int windowWidth  = 800;
+const int windowWidth = 800;
 const int windowHeight = 600;
-const int TILE_SIZE    = 16;
+const int TILE_SIZE = 16;
+
+SDL_Rect playerRect = {0, 0, 16, 16};
+int playerSpeed = 3;
+double playerAngle = 0;
+SDL_RendererFlip playerFlip = SDL_FLIP_NONE;
+
+Ghost blinky(0, 0, 16, 16);
+Pinky pinky(0, 0, 16, 16);
+Inky inky(0, 0, 16, 16);
+Clyde clyde(0, 0, 16, 16);
 
 vector<vector<int>> mapData;
 int tilesetCols = 0;
-
 bool playerMoved = false;
+int pacmanDirection = -1;
+
+SDL_Point FindSpawnPosition() {
+    int offsetX = (windowWidth - mapData[0].size() * TILE_SIZE) / 2;
+    int offsetY = (windowHeight - mapData.size() * TILE_SIZE) / 2;
+
+    for (int y = 0; y < mapData.size(); ++y) {
+        for (int x = 0; x < mapData[y].size(); ++x) {
+            if (mapData[y][x] == 136)
+                return SDL_Point{offsetX + x * TILE_SIZE, offsetY + y * TILE_SIZE};
+        }
+    }
+    return SDL_Point{offsetX, offsetY};
+}
+
+SDL_Point FindGhostSpawn(int tileID) {
+    int offsetX = (windowWidth - mapData[0].size() * TILE_SIZE) / 2;
+    int offsetY = (windowHeight - mapData.size() * TILE_SIZE) / 2;
+
+    for (int y = 0; y < mapData.size(); ++y) {
+        for (int x = 0; x < mapData[y].size(); ++x) {
+            if (mapData[y][x] == tileID)
+                return SDL_Point{offsetX + x * TILE_SIZE, offsetY + y * TILE_SIZE};
+        }
+    }
+    return SDL_Point{offsetX, offsetY};
+}
 
 vector<vector<int>> LoadMap(const string& filename) {
     ifstream file(filename);
@@ -52,12 +82,9 @@ vector<vector<int>> LoadMap(const string& filename) {
         string token;
         while (getline(ss, token, ',')) {
             token.erase(remove_if(token.begin(), token.end(), ::isspace), token.end());
-            if (!token.empty()) {
-                row.push_back(stoi(token));
-            }
+            if (!token.empty()) row.push_back(stoi(token));
         }
-        if (!row.empty())
-            result.push_back(row);
+        if (!row.empty()) result.push_back(row);
     }
     return result;
 }
@@ -67,8 +94,8 @@ void RenderMap(SDL_Renderer* renderer, SDL_Texture* tileset,
     SDL_Rect srcRect, dstRect;
     srcRect.w = srcRect.h = dstRect.w = dstRect.h = tileSize;
 
-    int offsetX = (windowWidth  - map[0].size() * tileSize) / 2;
-    int offsetY = (windowHeight - map.size()   * tileSize) / 2;
+    int offsetX = (windowWidth - map[0].size() * tileSize) / 2;
+    int offsetY = (windowHeight - map.size() * tileSize) / 2;
 
     for (int y = 0; y < map.size(); ++y) {
         for (int x = 0; x < map[y].size(); ++x) {
@@ -83,74 +110,52 @@ void RenderMap(SDL_Renderer* renderer, SDL_Texture* tileset,
     }
 }
 
-bool init() {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        cerr << "SDL could not initialize! " << SDL_GetError() << endl;
-        return false;
-    }
-    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
-        cerr << "SDL_image could not initialize! " << IMG_GetError() << endl;
-        return false;
-    }
+bool CanMoveTo(int newX, int newY) {
+    int offsetX = (windowWidth - mapData[0].size() * TILE_SIZE) / 2;
+    int offsetY = (windowHeight - mapData.size() * TILE_SIZE) / 2;
 
-    window = SDL_CreateWindow("Đi săn hay bị săn",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        windowWidth, windowHeight, SDL_WINDOW_SHOWN);
-    if (!window) {
-        cerr << "Window creation failed! " << SDL_GetError() << endl;
-        return false;
+    int tileX = (newX - offsetX) / TILE_SIZE;
+    int tileY = (newY - offsetY) / TILE_SIZE;
+
+    if (tileY >= 0 && tileY < mapData.size() &&
+        tileX >= 0 && tileX < mapData[0].size()) {
+        int tileID = mapData[tileY][tileX];
+
+        if (tileID == 176) {
+            mapData[tileY][tileX] = 136;
+            return true;
+        }
+
+        return tileID == 136 || tileID == 30 || tileID == 31;
     }
+    return false;
+}
+
+bool init() {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) return false;
+    if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) return false;
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) return false;
+
+    window = SDL_CreateWindow("Đi săn hay bị săn", SDL_WINDOWPOS_CENTERED,
+                              SDL_WINDOWPOS_CENTERED, windowWidth,
+                              windowHeight, SDL_WINDOW_SHOWN);
+    if (!window) return false;
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (!renderer) {
-        cerr << "Renderer creation failed! " << SDL_GetError() << endl;
-        return false;
-    }
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    if (!renderer) return false;
 
-    // Load tileset mới
-    SDL_Surface* surface = IMG_Load("assets/tilesetedit.png");
-    if (!surface) {
-        cerr << "Failed to load tileset! " << IMG_GetError() << endl;
-        return false;
-    }
-    tilesetCols    = surface->w / TILE_SIZE;
-    tilesetTexture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
+    SDL_Surface* screenSurface = IMG_Load("assets/Pacmanscreen.png");
+    if (!screenSurface) return false;
+    screenTexture = SDL_CreateTextureFromSurface(renderer, screenSurface);
+    SDL_FreeSurface(screenSurface);
 
-    // Load map CSV mới
-    mapData = LoadMap("mappacman.csv");
-
-    // Load texture nhân vật và ma
-    surface = IMG_Load("assets/player.png");
-    if (!surface) { cerr << "player.png load failed! " << IMG_GetError() << endl; return false; }
-    playerTexture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-
-    surface = IMG_Load("assets/blinky.png");
-    if (!surface) { cerr << "blinky.png load failed! " << IMG_GetError() << endl; return false; }
-    blinkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-
-    surface = IMG_Load("assets/pinky.png");
-    if (!surface) { cerr << "pinky.png load failed! " << IMG_GetError() << endl; return false; }
-    pinkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-
-    surface = IMG_Load("assets/inky.png");
-    if (!surface) { cerr << "inky.png load failed! " << IMG_GetError() << endl; return false; }
-    inkyTexture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-
-    surface = IMG_Load("assets/clyde.png");
-    if (!surface) { cerr << "clyde.png load failed! " << IMG_GetError() << endl; return false; }
-    clydeTexture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-
-    return true;
+    return screenTexture != nullptr;
 }
 
 void close() {
+    SoundManager::Free();
+
+    SDL_DestroyTexture(screenTexture);
     SDL_DestroyTexture(tilesetTexture);
     SDL_DestroyTexture(playerTexture);
     SDL_DestroyTexture(blinkyTexture);
@@ -159,73 +164,126 @@ void close() {
     SDL_DestroyTexture(clydeTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    Mix_CloseAudio();
     IMG_Quit();
     SDL_Quit();
 }
 
-void render() {
-    SDL_RenderClear(renderer);
+void showStartScreen() {
+    bool waiting = true;
+    SDL_Event event;
 
-    RenderMap(renderer, tilesetTexture, mapData, TILE_SIZE, tilesetCols);
+    SoundManager::Play("music/screensound.mp3", true);
 
-    SDL_RenderCopyEx(renderer, playerTexture, nullptr, &playerRect,
-                     playerAngle, nullptr, playerFlip);
+    while (waiting) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) exit(0);
+            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_RETURN)
+                waiting = false;
+        }
 
-    blinky.render(renderer, blinkyTexture);
-    pinky.render(renderer, pinkyTexture);
-    inky.render(renderer, inkyTexture);
-    clyde.render(renderer, clydeTexture);
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, screenTexture, nullptr, nullptr);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
+    }
 
-    SDL_RenderPresent(renderer);
+    SoundManager::Stop();
+    SoundManager::Play("music/playsound.mp3", true);
 }
 
 int main(int argc, char* argv[]) {
     if (!init()) {
-        cerr << "Failed to initialize!\n";
-        system("pause");
+        std::cerr << "Init failed\n";
         return -1;
     }
 
-    bool running = true;
-    SDL_Event event;
-    int pacmanDirection = 0;
+    showStartScreen();
 
-    while (running) {
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                running = false;
-            }
-            else if (event.type == SDL_KEYDOWN) {
-                switch (event.key.keysym.sym) {
-                    case SDLK_UP:
-                        playerRect.y -= playerSpeed;
-                        playerAngle = 270; pacmanDirection = 0; playerFlip = SDL_FLIP_NONE; playerMoved = true;
-                        break;
-                    case SDLK_DOWN:
-                        playerRect.y += playerSpeed;
-                        playerAngle = 90;  pacmanDirection = 1; playerFlip = SDL_FLIP_NONE; playerMoved = true;
-                        break;
-                    case SDLK_LEFT:
-                        playerRect.x -= playerSpeed;
-                        playerAngle = 0;   pacmanDirection = 2; playerFlip = SDL_FLIP_VERTICAL; playerMoved = true;
-                        break;
-                    case SDLK_RIGHT:
-                        playerRect.x += playerSpeed;
-                        playerAngle = 0;   pacmanDirection = 3; playerFlip = SDL_FLIP_NONE; playerMoved = true;
-                        break;
-                }
-                if (playerMoved) {
-                    blinky.active = pinky.active = inky.active = clyde.active = true;
-                }
-            }
+    SDL_Surface* surface = IMG_Load("assets/tilesetedit.png");
+    tilesetCols = surface->w / TILE_SIZE;
+    tilesetTexture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_FreeSurface(surface);
+
+    mapData = LoadMap("mappacman.csv");
+    SetMapData(mapData);
+
+    playerRect = { FindSpawnPosition().x, FindSpawnPosition().y, 16, 16 };
+    blinky.rect = { FindGhostSpawn(138).x, FindGhostSpawn(138).y, 16, 16 };
+    pinky.rect  = { FindGhostSpawn(139).x, FindGhostSpawn(139).y, 16, 16 };
+    inky.rect   = { FindGhostSpawn(159).x, FindGhostSpawn(159).y, 16, 16 };
+    clyde.rect  = { FindGhostSpawn(160).x, FindGhostSpawn(160).y, 16, 16 };
+
+    auto loadTex = [](const char* path) -> SDL_Texture* {
+        SDL_Surface* surf = IMG_Load(path);
+        if (!surf) {
+            std::cerr << "Failed to load texture: " << path << "\n";
+            return nullptr;
+        }
+        SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+        SDL_FreeSurface(surf);
+        return tex;
+    };
+
+    playerTexture = loadTex("assets/Pacman.png");
+    if (!playerTexture) {
+        std::cerr << "Error: playerTexture not loaded.\n";
+    }
+
+    // Debug log for playerRect
+    std::cerr << "Initial playerRect: x=" << playerRect.x << ", y=" << playerRect.y << ", w=" << playerRect.w << ", h=" << playerRect.h << "\n";
+
+    blinkyTexture = loadTex("assets/blinky.png");
+    pinkyTexture  = loadTex("assets/pinky.png");
+    inkyTexture   = loadTex("assets/inky.png");
+    clydeTexture  = loadTex("assets/clyde.png");
+
+    bool quit = false;
+    SDL_Event e;
+
+    while (!quit) {
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) quit = true;
         }
 
-        if (blinky.active) blinky.update(playerRect, pacmanDirection);
-        if (pinky.active)  pinky.update(playerRect, pacmanDirection);
-        if (inky.active)   inky.update(playerRect, pacmanDirection, blinky.rect);
-        if (clyde.active)  clyde.update(playerRect, pacmanDirection);
+        const Uint8* state = SDL_GetKeyboardState(nullptr);
+        playerMoved = false;
+        if (state[SDL_SCANCODE_UP] && CanMoveTo(playerRect.x, playerRect.y - playerSpeed)) {
+            playerRect.y -= playerSpeed;
+            pacmanDirection = 0;
+            playerMoved = true;
+        } else if (state[SDL_SCANCODE_DOWN] && CanMoveTo(playerRect.x, playerRect.y + playerSpeed)) {
+            playerRect.y += playerSpeed;
+            pacmanDirection = 1;
+            playerMoved = true;
+        } else if (state[SDL_SCANCODE_LEFT] && CanMoveTo(playerRect.x - playerSpeed, playerRect.y)) {
+            playerRect.x -= playerSpeed;
+            pacmanDirection = 2;
+            playerMoved = true;
+        } else if (state[SDL_SCANCODE_RIGHT] && CanMoveTo(playerRect.x + playerSpeed, playerRect.y)) {
+            playerRect.x += playerSpeed;
+            pacmanDirection = 3;
+            playerMoved = true;
+        }
 
-        render();
+        if (playerMoved) {
+            blinky.update(playerRect, pacmanDirection);
+            pinky.update(playerRect, pacmanDirection);
+            inky.update(playerRect, pacmanDirection, blinky.rect);
+            clyde.update(playerRect, pacmanDirection);
+        }
+
+        SDL_RenderClear(renderer);
+        RenderMap(renderer, tilesetTexture, mapData, TILE_SIZE, tilesetCols);
+
+        SDL_RenderCopy(renderer, playerTexture, nullptr, &playerRect);
+        SDL_RenderCopy(renderer, blinkyTexture, nullptr, &blinky.rect);
+        SDL_RenderCopy(renderer, pinkyTexture, nullptr, &pinky.rect);
+        SDL_RenderCopy(renderer, inkyTexture, nullptr, &inky.rect);
+        SDL_RenderCopy(renderer, clydeTexture, nullptr, &clyde.rect);
+
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
     }
 
     close();

@@ -5,8 +5,9 @@
 
 class Clyde : public Ghost {
 public:
-    Clyde(int x, int y);
+    Clyde(int x, int y, int w, int h);
     void update(SDL_Rect pacman, int pacmanDirection) override;
+    void Move(const std::vector<std::vector<int>>& mapData) override;
 };
 
 #endif

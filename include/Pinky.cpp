@@ -1,37 +1,40 @@
 #include "Pinky.h"
+#include "MapUtils.h"
 
-Pinky::Pinky(int x, int y) : Ghost(x, y) {
-    // Constructor của Pinky, kế thừa từ lớp Ghost
-    // Xác định vị trí ban đầu cho Pinky
-}
+// ✅ Gọi constructor cha Ghost
+Pinky::Pinky(int x, int y, int w, int h) : Ghost(x, y, w, h) {}
 
 void Pinky::update(SDL_Rect pacman, int pacmanDirection) {
-    if (!active) return;  // Nếu Pinky không được kích hoạt thì không làm gì
+    if (!active) return;
 
     int targetX = pacman.x;
     int targetY = pacman.y;
-    int targetOffset = 4 * 20;  // Khoảng cách lên trước Pac-Man (4 ô)
+    int offset = 4 * 16;  // 4 tile phía trước Pac-Man
 
-    // Căn cứ vào hướng di chuyển của Pac-Man, tính toán vị trí Pinky cần di chuyển
+    // Tính vị trí mục tiêu dựa theo hướng Pac-Man đang đi
     switch (pacmanDirection) {
-        case 0:  // Pac-Man di chuyển lên
-            targetY -= targetOffset;  // Pinky sẽ di chuyển lên trước Pac-Man
-            break;
-        case 1:  // Pac-Man di chuyển xuống
-            targetY += targetOffset;  // Pinky sẽ di chuyển xuống trước Pac-Man
-            break;
-        case 2:  // Pac-Man di chuyển trái
-            targetX -= targetOffset;  // Pinky sẽ di chuyển trái trước Pac-Man
-            break;
-        case 3:  // Pac-Man di chuyển phải
-            targetX += targetOffset;  // Pinky sẽ di chuyển phải trước Pac-Man
-            break;
+        case 0: targetY -= offset; break;  // Lên
+        case 1: targetY += offset; break;  // Xuống
+        case 2: targetX -= offset; break;  // Trái
+        case 3: targetX += offset; break;  // Phải
     }
 
-    // Di chuyển Pinky đến vị trí tính toán
-    if (rect.x < targetX) rect.x += speed;
-    else if (rect.x > targetX) rect.x -= speed;
+    int nextX = rect.x;
+    int nextY = rect.y;
 
-    if (rect.y < targetY) rect.y += speed;
-    else if (rect.y > targetY) rect.y -= speed;
+    // Di chuyển theo X
+    if (rect.x < targetX) nextX += speed;
+    else if (rect.x > targetX) nextX -= speed;
+    if (GhostCanMoveTo(nextX, rect.y)) rect.x = nextX;
+
+    // Di chuyển theo Y
+    if (rect.y < targetY) nextY += speed;
+    else if (rect.y > targetY) nextY -= speed;
+    if (GhostCanMoveTo(rect.x, nextY)) rect.y = nextY;
 }
+
+// ✅ Bổ sung hàm Move để tương thích với main.cpp
+void Pinky::Move(const std::vector<std::vector<int>>& mapData) {
+    SetMapData(mapData);  // Cập nhật map cho hàm GhostCanMoveTo sử dụng
+}
+
