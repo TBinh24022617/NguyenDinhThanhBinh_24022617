@@ -26,6 +26,7 @@ SDL_Renderer* renderer = nullptr;
 
 SDL_Texture* playerTexture = nullptr;
 SDL_Texture* screenTexture = nullptr;
+SDL_Texture* gameOverTexture = nullptr;  // Texture cho màn hình game over
 SDL_Texture* blinkyTexture = nullptr;
 SDL_Texture* pinkyTexture = nullptr;
 SDL_Texture* inkyTexture = nullptr;
@@ -47,6 +48,7 @@ Clyde clyde(0, 0, 16, 16);
 vector<vector<int>> mapData;
 int tilesetCols = 0;
 bool playerMoved = false;
+bool isGameOver = false;  // Biến để kiểm tra trạng thái game over
 
 SDL_Point FindSpawnPosition() {
     int offsetX = (windowWidth - mapData[0].size() * TILE_SIZE) / 2;
@@ -133,6 +135,52 @@ bool CanMoveTo(int newX, int newY) {
     return false;
 }
 
+bool CheckCollisionWithGhosts(SDL_Rect player, SDL_Rect ghost) {
+    // Checking if rectangles intersect
+    int leftA = player.x;
+    int rightA = player.x + player.w;
+    int topA = player.y;
+    int bottomA = player.y + player.h;
+
+    int leftB = ghost.x;
+    int rightB = ghost.x + ghost.w;
+    int topB = ghost.y;
+    int bottomB = ghost.y + ghost.h;
+
+    // Nếu một trong các điều kiện này đúng, không có va chạm
+    if (bottomA <= topB) return false;
+    if (topA >= bottomB) return false;
+    if (rightA <= leftB) return false;
+    if (leftA >= rightB) return false;
+
+    // Nếu không, có va chạm
+    return true;
+}
+
+void ShowGameOverScreen() {
+    // Dừng nhạc hiện tại
+    SoundManager::Stop();
+    // Phát âm thanh pacman die
+    SoundManager::Play("music/pacman-die.mp3", false);
+
+    bool waiting = true;
+    SDL_Event event;
+
+    while (waiting) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT || 
+               (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_RETURN)) {
+                waiting = false;
+            }
+        }
+
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, gameOverTexture, nullptr, nullptr);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(16);
+    }
+}
+
 bool init() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) return false;
     if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) return false;
@@ -144,14 +192,18 @@ bool init() {
     if (!window) return false;
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (!renderer) return false;
-
-    SDL_Surface* screenSurface = IMG_Load("assets/Pacmanscreen.png");
+    if (!renderer) return false;    SDL_Surface* screenSurface = IMG_Load("assets/Pacmanscreen.png");
     if (!screenSurface) return false;
     screenTexture = SDL_CreateTextureFromSurface(renderer, screenSurface);
     SDL_FreeSurface(screenSurface);
 
-    return screenTexture != nullptr;
+    // Load game over texture
+    SDL_Surface* gameOverSurface = IMG_Load("assets/gameover.png");
+    if (!gameOverSurface) return false;
+    gameOverTexture = SDL_CreateTextureFromSurface(renderer, gameOverSurface);
+    SDL_FreeSurface(gameOverSurface);
+
+    return screenTexture != nullptr && gameOverTexture != nullptr;
 }
 
 void close() {
@@ -300,12 +352,22 @@ int main(int argc, char* argv[]) {
             playerRect.x += playerSpeed;
             pacmanDirection = 3;
             playerMoved = true;
-        }        // Luôn cập nhật các con ma, không phụ thuộc vào việc người chơi di chuyển
+        }
+
+        // Luôn cập nhật các con ma, không phụ thuộc vào việc người chơi di chuyển
         blinky.update(playerRect, pacmanDirection);
         pinky.update(playerRect, pacmanDirection);
         // Inky cần thông tin về vị trí của Blinky
         ((Inky&)inky).updateWithBlinky(playerRect, pacmanDirection, blinky.rect);
         clyde.update(playerRect, pacmanDirection);
+
+        // Kiểm tra va chạm với các con ma
+        if (CheckCollisionWithGhosts(playerRect, blinky.rect) ||
+            CheckCollisionWithGhosts(playerRect, pinky.rect) ||
+            CheckCollisionWithGhosts(playerRect, inky.rect) ||
+            CheckCollisionWithGhosts(playerRect, clyde.rect)) {
+            isGameOver = true;
+        }
 
         SDL_RenderClear(renderer);
         RenderMap(renderer, tilesetTexture, mapData, TILE_SIZE, tilesetCols);
@@ -323,6 +385,11 @@ int main(int argc, char* argv[]) {
 
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
+
+        if (isGameOver) {
+            ShowGameOverScreen();
+            quit = true;
+        }
     }
 
     close();
