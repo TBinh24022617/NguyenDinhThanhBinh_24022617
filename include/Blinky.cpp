@@ -1,39 +1,38 @@
-#include "Pinky.h"
+#include "Blinky.h"
 #include "MapUtils.h"
 #include <cmath>
 
-extern const int WINDOW_WIDTH;
-extern const int WINDOW_HEIGHT;
+extern const int windowWidth;
+extern const int windowHeight;
 
-Pinky::Pinky(int x, int y, int w, int h) : Ghost(x, y, w, h) {
+Blinky::Blinky(int x, int y, int w, int h) : Ghost(x, y, w, h) {
     speed = 2;
-    homeCorner.x = 32;
+    homeCorner.x = windowWidth - 32;
     homeCorner.y = 32;
-    releaseTimer = 7000;
+    releaseTimer = 3000; // 3 giây để ra khỏi nhà
 }
 
-void Pinky::update(SDL_Rect pacman, int pacmanDirection) {
+void Blinky::update(SDL_Rect pacman, int pacmanDirection) {
     if (!active) return;
     currentPacmanDirection = pacmanDirection;
     Ghost::update(pacman, pacmanDirection);
 }
 
-void Pinky::chooseDirection(SDL_Rect pacman) {
-    // Pinky nhắm tới điểm trước mặt Pacman
+void Blinky::chooseDirection(SDL_Rect pacman) {
+    // Blinky luôn đuổi theo thẳng Pacman
     int targetX = pacman.x;
     int targetY = pacman.y;
     
-    // Dự đoán vị trí phía trước Pacman
-    switch (currentPacmanDirection) {
-        case 0: targetY -= 64; break; // Lên
-        case 1: targetY += 64; break; // Xuống
-        case 2: targetX -= 64; break; // Trái
-        case 3: targetX += 64; break; // Phải
+    // Nếu ở chế độ scatter thì về góc nhà
+    if (currentState == SCATTER) {
+        targetX = homeCorner.x;
+        targetY = homeCorner.y;
     }
     
     int dx = targetX - rect.x;
     int dy = targetY - rect.y;
     
+    // Chọn hướng di chuyển dựa trên khoảng cách xa nhất
     if (abs(dx) > abs(dy)) {
         currentDirection = (dx > 0) ? 3 : 2;
         if (!canMove(rect.x + (currentDirection == 3 ? speed : -speed), rect.y)) {
@@ -46,4 +45,3 @@ void Pinky::chooseDirection(SDL_Rect pacman) {
         }
     }
 }
-

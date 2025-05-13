@@ -3,12 +3,13 @@
 
 #include <vector>
 
-extern std::vector<std::vector<int>> mapData;
+// Global constants
+extern const int windowWidth;
+extern const int windowHeight;
+const int TILE_SIZE = 16;
 
-// Hàm này sẽ được gọi để truyền mapData vào
+extern std::vector<std::vector<int>> currentMapData;
 void SetMapData(const std::vector<std::vector<int>>& data);
-
-// Hàm kiểm tra liệu Ghost có thể di chuyển tới vị trí mới không
 bool GhostCanMoveTo(int newX, int newY);
 
 #endif // MAPUTILS_H

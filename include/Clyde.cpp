@@ -1,48 +1,51 @@
 #include "Clyde.h"
-#include <cmath>
 #include "MapUtils.h"
+#include <cmath>
+
+extern const int WINDOW_WIDTH;
+extern const int WINDOW_HEIGHT;
 
 Clyde::Clyde(int x, int y, int w, int h) : Ghost(x, y, w, h) {
-    speed = 1;
+    speed = 2;
+    homeCorner.x = 32;
+    homeCorner.y = windowHeight - 32; // Góc trái dưới
+    releaseTimer = 20000; // 20 giây để ra khỏi nhà
 }
 
 void Clyde::update(SDL_Rect pacman, int pacmanDirection) {
     if (!active) return;
-
-    int dx = pacman.x - rect.x;
-    int dy = pacman.y - rect.y;
-    float distance = std::sqrt(dx * dx + dy * dy);
-
-    int nextX = rect.x;
-    int nextY = rect.y;
-
-    if (distance > 100) {
-        if (dx != 0) nextX += (dx > 0) ? speed : -speed;
-        if (GhostCanMoveTo(nextX, rect.y)) rect.x = nextX;
-
-        if (dy != 0) nextY += (dy > 0) ? speed : -speed;
-        if (GhostCanMoveTo(rect.x, nextY)) rect.y = nextY;
-    } else {
-        // Nếu gần Pac-Man thì chạy về góc dưới bên trái bản đồ
-        int tx = 0;
-        int ty = 600 - rect.h;
-
-        int txDiff = tx - rect.x;
-        int tyDiff = ty - rect.y;
-
-        if (txDiff != 0) nextX += (txDiff > 0) ? speed : -speed;
-        if (GhostCanMoveTo(nextX, rect.y)) rect.x = nextX;
-
-        if (tyDiff != 0) nextY += (tyDiff > 0) ? speed : -speed;
-        if (GhostCanMoveTo(rect.x, nextY)) rect.y = nextY;
-    }
+    currentPacmanDirection = pacmanDirection;
+    Ghost::update(pacman, pacmanDirection);
 }
 
-// ✅ Hàm Move() đơn giản gọi lại update() để dùng được trong main
-void Clyde::Move(const std::vector<std::vector<int>>& mapData) {
-    // Không cần dùng mapData ở đây vì đã xử lý va chạm trong GhostCanMoveTo
-    // Nếu bạn cần AI phức tạp hơn có thể dùng mapData để tìm đường
-    // Tạm thời để Pac-Man đứng yên nếu không được truyền vào
-    SDL_Rect dummyPacman = { rect.x, rect.y, rect.w, rect.h };
-    update(dummyPacman, 0);
+void Clyde::chooseDirection(SDL_Rect pacman) {
+    int targetX = pacman.x;
+    int targetY = pacman.y;
+    
+    // Tính khoảng cách đến Pacman
+    int dx = targetX - rect.x;
+    int dy = targetY - rect.y;
+    float distance = sqrt(dx*dx + dy*dy);
+    
+    // Nếu khoảng cách < 8 ô hoặc ở chế độ scatter, đi về góc nhà
+    if (distance < 128 || currentState == SCATTER) {
+        targetX = homeCorner.x;
+        targetY = homeCorner.y;
+    }
+    
+    // Chọn hướng di chuyển dựa trên khoảng cách xa nhất
+    dx = targetX - rect.x;
+    dy = targetY - rect.y;
+    
+    if (abs(dx) > abs(dy)) {
+        currentDirection = (dx > 0) ? 3 : 2;
+        if (!canMove(rect.x + (currentDirection == 3 ? speed : -speed), rect.y)) {
+            currentDirection = (dy > 0) ? 1 : 0;
+        }
+    } else {
+        currentDirection = (dy > 0) ? 1 : 0;
+        if (!canMove(rect.x, rect.y + (currentDirection == 1 ? speed : -speed))) {
+            currentDirection = (dx > 0) ? 3 : 2;
+        }
+    }
 }

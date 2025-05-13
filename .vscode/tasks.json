@@ -12,6 +12,7 @@
         "${workspaceFolder}/main.exe",
         "${workspaceFolder}/main.cpp",
         "${workspaceFolder}/include/Ghost.cpp",
+           "C:/setupsdl/fatman/include/Blinky.cpp",
         "${workspaceFolder}/include/Pinky.cpp",
         "${workspaceFolder}/include/Inky.cpp",
         "${workspaceFolder}/include/Clyde.cpp",

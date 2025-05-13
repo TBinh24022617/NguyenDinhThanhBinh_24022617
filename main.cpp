@@ -6,15 +6,20 @@
 #include "include/SDL.h"
 #include "include/SDL_image.h"
 #include "include/SDL_mixer.h"
-#include "Ghost.h"
-#include "Pinky.h"
-#include "Inky.h"
-#include "Clyde.h"
-#include "MapUtils.h"
-#include "SoundManager.h"
+#include "include/Blinky.h"
+#include "include/Pinky.h"
+#include "include/Inky.h"
+#include "include/Clyde.h"
+#include "include/MapUtils.h"
+#include "include/SoundManager.h"
+#include <unistd.h>
 #undef main
 
 using namespace std;
+
+// Define window dimensions
+const int windowWidth = 800;
+const int windowHeight = 600;
 
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
@@ -27,16 +32,14 @@ SDL_Texture* inkyTexture = nullptr;
 SDL_Texture* clydeTexture = nullptr;
 SDL_Texture* tilesetTexture = nullptr;
 
-const int windowWidth = 800;
-const int windowHeight = 600;
-const int TILE_SIZE = 16;
-
 SDL_Rect playerRect = {0, 0, 16, 16};
-int playerSpeed = 3;
+int playerSpeed = 2;
 double playerAngle = 0;
 SDL_RendererFlip playerFlip = SDL_FLIP_NONE;
+int pacmanDirection = -1; // -1: không di chuyển, 0: lên, 1: xuống, 2: trái, 3: phải
 
-Ghost blinky(0, 0, 16, 16);
+// Khai báo các ghost
+Blinky blinky(0, 0, 16, 16);
 Pinky pinky(0, 0, 16, 16);
 Inky inky(0, 0, 16, 16);
 Clyde clyde(0, 0, 16, 16);
@@ -44,7 +47,6 @@ Clyde clyde(0, 0, 16, 16);
 vector<vector<int>> mapData;
 int tilesetCols = 0;
 bool playerMoved = false;
-int pacmanDirection = -1;
 
 SDL_Point FindSpawnPosition() {
     int offsetX = (windowWidth - mapData[0].size() * TILE_SIZE) / 2;
@@ -214,20 +216,53 @@ int main(int argc, char* argv[]) {
     inky.rect   = { FindGhostSpawn(159).x, FindGhostSpawn(159).y, 16, 16 };
     clyde.rect  = { FindGhostSpawn(160).x, FindGhostSpawn(160).y, 16, 16 };
 
+    // Kích hoạt các con ma
+    blinky.active = true;
+    pinky.active = true;
+    inky.active = true;
+    clyde.active = true;
+
     auto loadTex = [](const char* path) -> SDL_Texture* {
+        std::cerr << "Attempting to load texture from: " << path << std::endl;
+        
         SDL_Surface* surf = IMG_Load(path);
         if (!surf) {
-            std::cerr << "Failed to load texture: " << path << "\n";
+            std::cerr << "Failed to load surface: " << IMG_GetError() << std::endl;
+            std::cerr << "Current working directory: ";
+            char cwd[256];
+            if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                std::cerr << cwd << std::endl;
+            }
             return nullptr;
         }
+        
+        std::cerr << "Successfully loaded surface. Size: " << surf->w << "x" << surf->h << std::endl;
+        
         SDL_Texture* tex = SDL_CreateTextureFromSurface(renderer, surf);
+        if (!tex) {
+            std::cerr << "Failed to create texture: " << SDL_GetError() << std::endl;
+            SDL_FreeSurface(surf);
+            return nullptr;
+        }
+        
+        std::cerr << "Successfully created texture" << std::endl;
         SDL_FreeSurface(surf);
         return tex;
     };
 
-    playerTexture = loadTex("assets/Pacman.png");
+    // Chỉ thử tải player.png
+    playerTexture = loadTex("assets/player.png");
     if (!playerTexture) {
-        std::cerr << "Error: playerTexture not loaded.\n";
+        std::cerr << "Critical error: Could not load player.png" << std::endl;
+        // Kiểm tra xem file có tồn tại không
+        FILE* file = fopen("assets/player.png", "rb");
+        if (file) {
+            std::cerr << "File exists but couldn't be loaded as an image" << std::endl;
+            fclose(file);
+        } else {
+            std::cerr << "File does not exist" << std::endl;
+        }
+        return -1;
     }
 
     // Debug log for playerRect
@@ -248,6 +283,7 @@ int main(int argc, char* argv[]) {
 
         const Uint8* state = SDL_GetKeyboardState(nullptr);
         playerMoved = false;
+
         if (state[SDL_SCANCODE_UP] && CanMoveTo(playerRect.x, playerRect.y - playerSpeed)) {
             playerRect.y -= playerSpeed;
             pacmanDirection = 0;
@@ -264,19 +300,22 @@ int main(int argc, char* argv[]) {
             playerRect.x += playerSpeed;
             pacmanDirection = 3;
             playerMoved = true;
-        }
-
-        if (playerMoved) {
-            blinky.update(playerRect, pacmanDirection);
-            pinky.update(playerRect, pacmanDirection);
-            inky.update(playerRect, pacmanDirection, blinky.rect);
-            clyde.update(playerRect, pacmanDirection);
-        }
+        }        // Luôn cập nhật các con ma, không phụ thuộc vào việc người chơi di chuyển
+        blinky.update(playerRect, pacmanDirection);
+        pinky.update(playerRect, pacmanDirection);
+        // Inky cần thông tin về vị trí của Blinky
+        ((Inky&)inky).updateWithBlinky(playerRect, pacmanDirection, blinky.rect);
+        clyde.update(playerRect, pacmanDirection);
 
         SDL_RenderClear(renderer);
         RenderMap(renderer, tilesetTexture, mapData, TILE_SIZE, tilesetCols);
 
-        SDL_RenderCopy(renderer, playerTexture, nullptr, &playerRect);
+        if (playerTexture) {
+            SDL_RenderCopy(renderer, playerTexture, nullptr, &playerRect);
+        } else {
+            std::cerr << "Error: playerTexture is null during rendering.\n";
+        }
+
         SDL_RenderCopy(renderer, blinkyTexture, nullptr, &blinky.rect);
         SDL_RenderCopy(renderer, pinkyTexture, nullptr, &pinky.rect);
         SDL_RenderCopy(renderer, inkyTexture, nullptr, &inky.rect);
