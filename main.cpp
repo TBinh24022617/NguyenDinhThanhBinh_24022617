@@ -36,8 +36,8 @@ SDL_Texture* tilesetTexture = nullptr;
 
 SDL_Rect playerRect = {0, 0, 16, 16};
 int playerSpeed = 2;
-double playerAngle = 0;
-SDL_RendererFlip playerFlip = SDL_FLIP_NONE;
+double playerAngle = 0.0; // Góc quay của nhân vật
+SDL_RendererFlip playerFlip = SDL_FLIP_NONE; // Trạng thái lật của nhân vật
 int pacmanDirection = -1; // -1: không di chuyển, 0: lên, 1: xuống, 2: trái, 3: phải
 
 // Khai báo các ghost
@@ -374,23 +374,29 @@ int main(int argc, char* argv[]) {
         }
 
         const Uint8* state = SDL_GetKeyboardState(nullptr);
-        playerMoved = false;
-
-        if (state[SDL_SCANCODE_UP] && CanMoveTo(playerRect.x, playerRect.y - playerSpeed)) {
+        playerMoved = false;        if (state[SDL_SCANCODE_UP] && CanMoveTo(playerRect.x, playerRect.y - playerSpeed)) {
             playerRect.y -= playerSpeed;
             pacmanDirection = 0;
+            playerAngle = -90.0;  // Xoay lên trên
+            playerFlip = SDL_FLIP_NONE;
             playerMoved = true;
         } else if (state[SDL_SCANCODE_DOWN] && CanMoveTo(playerRect.x, playerRect.y + playerSpeed)) {
             playerRect.y += playerSpeed;
             pacmanDirection = 1;
+            playerAngle = 90.0;   // Xoay xuống dưới
+            playerFlip = SDL_FLIP_NONE;
             playerMoved = true;
         } else if (state[SDL_SCANCODE_LEFT] && CanMoveTo(playerRect.x - playerSpeed, playerRect.y)) {
             playerRect.x -= playerSpeed;
             pacmanDirection = 2;
+            playerAngle = 0.0;    // Không xoay
+            playerFlip = SDL_FLIP_HORIZONTAL;  // Lật ngang khi di chuyển sang trái
             playerMoved = true;
         } else if (state[SDL_SCANCODE_RIGHT] && CanMoveTo(playerRect.x + playerSpeed, playerRect.y)) {
             playerRect.x += playerSpeed;
             pacmanDirection = 3;
+            playerAngle = 0.0;    // Không xoay
+            playerFlip = SDL_FLIP_NONE;   // Không lật khi di chuyển sang phải
             playerMoved = true;
         }
 
@@ -410,10 +416,11 @@ int main(int argc, char* argv[]) {
         }
 
         SDL_RenderClear(renderer);
-        RenderMap(renderer, tilesetTexture, mapData, TILE_SIZE, tilesetCols);
-
-        if (playerTexture) {
-            SDL_RenderCopy(renderer, playerTexture, nullptr, &playerRect);
+        RenderMap(renderer, tilesetTexture, mapData, TILE_SIZE, tilesetCols);        if (playerTexture) {
+            // Sử dụng điểm giữa của texture làm điểm xoay
+            SDL_Point center = {playerRect.w / 2, playerRect.h / 2};
+            // Xoay và lật sprite dựa trên hướng di chuyển
+            SDL_RenderCopyEx(renderer, playerTexture, nullptr, &playerRect, playerAngle, &center, playerFlip);
         } else {
             std::cerr << "Error: playerTexture is null during rendering.\n";
         }
